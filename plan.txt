@@ -1,0 +1,183 @@
+UPGRADE PLAN: Music Recommender -> AI-Powered RAG System
+=========================================================
+
+ADVANCED AI FEATURE: RAG + Claude API
+--------------------------------------
+The existing score_song() / recommend_songs() becomes the RETRIEVAL layer.
+Claude API becomes the GENERATION layer -- it receives the scored songs as
+context and generates a personalized natural language explanation.
+This is true RAG, fully integrated into the main application logic.
+
+
+PHASE 1 -- Fix Package Structure & Recommender Stubs
+-----------------------------------------------------
+Files: create src/ package, move recommender.py into it, fix issues so tests pass
+
+- Create src/__init__.py and conftest.py at project root
+- Add default values to the 5 new Song fields so the test's 10-arg constructor works:
+    popularity: float = 50.0
+    release_decade: str = "2020s"
+    mood_tag: str = ""
+    instrumentalness: float = 0.10
+    liveness: float = 0.15
+- Fix Recommender.recommend() -- delegate to existing score_song() logic with a
+  dict bridge (UserProfile.favorite_genre -> "genre" key, etc.)
+- Fix Recommender.explain_recommendation() -- call score_song() and format the
+  reasons list as a readable string
+- Create tests/__init__.py to fix pytest import resolution
+
+
+PHASE 2 -- Add Claude RAG Module
+---------------------------------
+New file: src/rag_explainer.py
+
+Single public function:
+    explain_with_claude(user_prefs: dict, top_songs: list, query: str) -> str
+
+Flow:
+  1. Retrieval already done -- top_songs arrives pre-scored from recommend_songs()
+  2. Build a structured context block: title, artist, score, reasons for each song
+  3. Send to Claude with the context injected into the prompt -- Claude reasons over it
+  4. Return Claude's natural language explanation
+  5. On API error -> fall back to the rule-based reasons list (logged as WARNING)
+  6. Use prompt caching on the system message (cost optimization)
+
+Claude model: claude-sonnet-4-6
+Max tokens: 512
+Client init: anthropic.Anthropic() (reads ANTHROPIC_API_KEY from environment)
+
+
+PHASE 3 -- Logging & Guardrails
+---------------------------------
+New file: src/logger_config.py
+  - setup_logging(log_file="recommender.log") function
+  - Console handler: WARNING+ only
+  - File handler (recommender.log): DEBUG+ everything
+  - Format: "timestamp | module | level | message"
+  - Called once at startup in app.py and main.py
+
+Guardrails to add:
+  - Empty song list -> return canned message, skip API call (log WARNING)
+  - k <= 0 in Recommender.recommend() -> raise ValueError
+  - Claude returns empty/short response -> fall back to rule-based (log WARNING)
+  - CSV file missing -> raise descriptive error with clear message
+  - Truncate context to top 3 songs if more than 5 are passed (defensive)
+
+Error handling:
+  - Wrap API call in try/except anthropic.APIError
+  - Log exception type and message at WARNING level
+  - Return fallback string -- app never crashes due to API issues
+
+
+PHASE 4 -- Streamlit Chat UI
+------------------------------
+New file: app.py (project root -- main entry point)
+
+Sidebar (st.sidebar):
+  - Genre dropdown: sourced dynamically from songs.csv unique values
+  - Mood dropdown: sourced dynamically from songs.csv unique values
+  - Energy slider: 0.0 to 1.0, step 0.05
+  - Valence slider: 0.0 to 1.0, step 0.05
+  - Decade selectbox: 1960s / 1970s / 1980s / 1990s / 2000s / 2010s / 2020s
+  - "Find My Songs" button
+
+Main panel:
+  - Top 5 song cards showing title, artist, genre, mood_tag, score bar
+  - Below cards: Claude's RAG explanation in a styled st.info() block
+    with header "Your Personalized Explanation"
+  - st.spinner("Claude is thinking...") while API call runs
+  - st.warning() if fallback explanation was used
+
+State management:
+  - st.session_state to store last results
+  - Only re-run RAG call if preferences actually changed
+  - Call setup_logging() at module level (top of app.py)
+
+
+PHASE 5 -- Tests for Reliability
+----------------------------------
+Modify: tests/test_recommender.py
+  - Existing tests pass once Phase 1 is complete (no changes needed to tests)
+  - Add test_recommend_returns_k_results(): assert len == 1 when k=1
+  - Add test_recommend_empty_songs_returns_empty_list()
+  - Add test_explain_recommendation_mentions_genre(): assert "pop" in output
+
+New file: tests/test_rag_explainer.py
+  - All tests mock the Claude API -- zero real API calls, no key required
+  - test_explain_with_claude_returns_string(): mock returns fixed string, assert str
+  - test_explain_with_claude_fallback_on_api_error(): mock raises APIStatusError,
+    assert fallback string returned (not an exception)
+  - test_explain_with_claude_empty_songs_returns_canned_message(): assert API
+    mock was NOT called (mock.assert_not_called())
+  - test_context_contains_song_title(): inspect args passed to mock's
+    messages.create() -- assert song title appears in prompt content
+    (CRITICAL: proves RAG actually injects retrieved data into the prompt)
+
+New file: tests/test_load_songs.py
+  - test_load_songs_returns_correct_count(): assert len == expected row count
+  - test_load_songs_numeric_fields_are_floats(): assert isinstance(energy, float)
+  - test_load_songs_file_not_found_raises(): assert FileNotFoundError on bad path
+
+
+PHASE 6 -- Dependencies, Environment & Setup
+----------------------------------------------
+Modify requirements.txt -- add:
+  anthropic>=0.40.0
+  python-dotenv>=1.0.0
+
+Create .env.example:
+  ANTHROPIC_API_KEY=your_api_key_here
+
+Create/update .gitignore -- must include:
+  .env
+  recommender.log
+  __pycache__/
+  *.pyc
+  .pytest_cache/
+
+Create README.md with these sections:
+  1. Prerequisites: Python 3.10+, pip
+  2. Setup:
+       git clone <repo-url>
+       pip install -r requirements.txt
+       cp .env.example .env   # then edit .env and add your Anthropic API key
+  3. Run Streamlit app:  streamlit run app.py
+  4. Run CLI demo:       python main.py
+  5. Run tests:          pytest tests/   (no API key needed -- RAG calls are mocked)
+  6. Project structure tree
+
+
+EXECUTION ORDER
+---------------
+Phase 1 -> Phase 3 -> Phase 2 -> Phase 4 -> Phase 5 -> Phase 6
+
+NOTE: Phase 3 (logger config) must be created BEFORE Phase 2 (rag_explainer)
+because rag_explainer.py imports from logger_config.py.
+
+
+FILE STRUCTURE AFTER COMPLETION
+---------------------------------
+applied-ai-system-project/
+  src/
+    __init__.py
+    recommender.py          (moved + fixed from root)
+    rag_explainer.py        (NEW -- RAG + Claude API)
+    logger_config.py        (NEW -- logging setup)
+  tests/
+    __init__.py             (NEW)
+    test_recommender.py     (updated)
+    test_rag_explainer.py   (NEW)
+    test_load_songs.py      (NEW)
+  data/
+    songs.csv
+  assets/
+    Final_Mermaid_class_diagram.png
+  app.py                    (NEW -- Streamlit UI, main entry point)
+  main.py                   (updated -- calls setup_logging)
+  recommender.py            (keep at root for backward compat with main.py)
+  requirements.txt          (updated)
+  .env.example              (NEW)
+  .gitignore                (NEW/updated)
+  README.md                 (NEW)
+  reflection.md
+  plan.txt                  (this file)
