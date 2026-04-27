@@ -1,0 +1,29 @@
+pop
+Pop music is characterized by catchy melodies, polished production, and broad mainstream appeal. It typically features verse-chorus structures, radio-friendly song lengths, and high production values. Modern pop blends elements from dance, R&B, and electronic music. Listeners who enjoy pop tend to seek energetic, emotionally uplifting songs with strong hooks and danceable rhythms. Chart-topping pop often pairs high energy with positive valence and heavy vocal presence.
+
+lofi
+Lo-fi hip hop (lofi) is defined by its intentionally imperfect, warm sound — think vinyl crackle, dusty drum samples, and mellow jazz-influenced chord progressions. The genre prioritizes atmosphere over technical perfection, creating a sense of cozy intimacy. It is deeply associated with focus, studying, and late-night relaxation. Lofi tracks are typically instrumental or feature minimal vocals, with low energy, mid-range valence, and high acousticness. Listeners gravitate toward lofi when they want background music that calms without demanding attention.
+
+rock
+Rock music is built on electric guitar-driven arrangements, driving rhythms, and expressive vocals. It encompasses a wide emotional range from anthemic and uplifting to dark and aggressive. Hard rock and alternative rock tend toward high energy, lower valence (darker emotional tone), and a raw, live-recorded aesthetic. Rock listeners often seek authenticity and intensity over polish. The genre rewards instrumental complexity and benefits from a slight liveness quality that captures the feel of a live performance.
+
+jazz
+Jazz is one of the most harmonically sophisticated popular genres, characterized by improvisation, complex chord changes, and swing rhythms. It ranges from smooth and relaxed (bossa nova, cool jazz) to energetic and intense (bebop, fusion). Jazz has a timeless quality that spans decades, with a rich catalog from the 1950s through today. Listeners who favor jazz typically appreciate musicianship, subtlety, and emotional nuance. Jazz tracks often feature acoustic instruments, moderate to low energy, and mid-to-high valence.
+
+ambient
+Ambient music prioritizes texture, atmosphere, and mood over melody or rhythm. It is designed to modify the listener's environment rather than demand active attention. Ambient tracks are typically very low energy, highly atmospheric, and almost fully instrumental. The genre draws from electronic music, minimalism, and classical composition. Listeners use ambient music for meditation, sleep, focus, or creative work. High acousticness combined with low liveness (studio-clean production) is characteristic of the genre.
+
+synthwave
+Synthwave is a retro-futuristic genre inspired by 1980s film soundtracks, video game music, and new wave. It features synthesizer-heavy arrangements, driving drum machines, and a nostalgic cinematic quality. The genre sits at medium-to-high energy with a moody, tense emotional character. Synthwave appeals to listeners who enjoy the aesthetic of 1980s science fiction and action films. It is largely electronic and instrumental, though vocal synthwave tracks exist. The decade association is often the 1980s or modern reinterpretations released in the 2010s-2020s.
+
+metal
+Metal is an extreme rock subgenre defined by distorted electric guitars, aggressive drumming, and intense vocal delivery. It prioritizes power, speed, and emotional catharsis. Metal consistently scores at the high end of the energy spectrum and the low end of valence — it is loud, dark, and intense by design. Despite its aggressive surface, metal communities value technical precision and compositional depth. Listeners seeking metal want music that channels anger, intensity, or raw power. Acousticness is typically near zero; liveness varies by subgenre.
+
+indie
+Indie (independent) music is less a sound than an attitude — it refers to music released outside major label systems and values artistic authenticity over commercial appeal. Indie encompasses a wide range: indie pop is bright and melodic, indie rock is guitar-driven and introspective, indie folk is acoustic and emotional. Indie listeners often tolerate — even prefer — unconventional song structures, lo-fi production, and emotional ambiguity. Energy and valence vary widely; what unifies indie is a sense of personal expression and originality.
+
+classical
+Classical music encompasses European art music spanning roughly from the 1600s to today. It is defined by formal structures (sonatas, symphonies, concertos), acoustic instrumentation, and technical mastery. Classical tracks are fully instrumental, high in acousticness, and vary widely in energy (from intimate solo piano to full orchestral climaxes). Classical listeners often seek emotional depth, dynamic range, and the storytelling quality of long-form compositions. The genre rewards attentive listening and rewards repeated plays as listeners discover new layers.
+
+bossa nova
+Bossa nova is a Brazilian genre that fuses samba rhythms with cool jazz harmony. It originated in the late 1950s and is defined by its gentle guitar patterns, subtle percussion, and intimate vocal delivery. Bossa nova sits at low-to-medium energy with warm, romantic valence. It is highly acoustic and typically recorded in small, close-mic settings that give it an intimate liveness quality. Listeners who favor bossa nova seek elegant simplicity — music that is sophisticated without being demanding. The genre has a strong 1960s-1980s catalog but continues to be recorded today.

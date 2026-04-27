@@ -1,3 +1,4 @@
+import pytest
 from src.recommender import Song, UserProfile, Recommender
 
 def make_small_recommender() -> Recommender:
@@ -59,3 +60,50 @@ def test_explain_recommendation_returns_non_empty_string():
     explanation = rec.explain_recommendation(user, song)
     assert isinstance(explanation, str)
     assert explanation.strip() != ""
+
+
+def test_recommend_returns_k_results():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+    rec = make_small_recommender()
+    results = rec.recommend(user, k=1)
+    assert len(results) == 1
+
+
+def test_recommend_empty_songs_returns_empty_list():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+    rec = Recommender([])
+    assert rec.recommend(user, k=5) == []
+
+
+def test_recommend_invalid_k_raises():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+    rec = make_small_recommender()
+    with pytest.raises(ValueError):
+        rec.recommend(user, k=0)
+
+
+def test_explain_recommendation_mentions_genre():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+    rec = make_small_recommender()
+    explanation = rec.explain_recommendation(user, rec.songs[0])
+    assert "pop" in explanation

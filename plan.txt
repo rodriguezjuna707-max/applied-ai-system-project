@@ -1,168 +1,317 @@
 UPGRADE PLAN: Music Recommender -> AI-Powered RAG System
 =========================================================
-
-ADVANCED AI FEATURE: RAG + Claude API
---------------------------------------
-The existing score_song() / recommend_songs() becomes the RETRIEVAL layer.
-Claude API becomes the GENERATION layer -- it receives the scored songs as
-context and generates a personalized natural language explanation.
-This is true RAG, fully integrated into the main application logic.
+Target score: 21/21 required + 6 stretch points (RAG Enhancement, Agentic
+Workflow, Test Harness) = up to 27 pts
 
 
-PHASE 1 -- Fix Package Structure & Recommender Stubs
------------------------------------------------------
-Files: create src/ package, move recommender.py into it, fix issues so tests pass
-
-- Create src/__init__.py and conftest.py at project root
-- Add default values to the 5 new Song fields so the test's 10-arg constructor works:
-    popularity: float = 50.0
-    release_decade: str = "2020s"
-    mood_tag: str = ""
-    instrumentalness: float = 0.10
-    liveness: float = 0.15
-- Fix Recommender.recommend() -- delegate to existing score_song() logic with a
-  dict bridge (UserProfile.favorite_genre -> "genre" key, etc.)
-- Fix Recommender.explain_recommendation() -- call score_song() and format the
-  reasons list as a readable string
-- Create tests/__init__.py to fix pytest import resolution
+===========================================================================
+RUBRIC ITEM 1 (3pts) -- Clear Identification of Base Project
+===========================================================================
+To earn full credit, the README and reflection must both include:
+  - Name: "AI Music Recommender System"
+  - Original scope: pure rule-based scorer that reads songs.csv, scores each
+    song against a hardcoded user preference dict using weighted proximity
+    math (MAX_SCORE 6.80), and prints a ranked top-k list with reasons.
+  - Capabilities before upgrade: load_songs(), score_song(), recommend_songs()
+    plus a Song/UserProfile dataclass and a Recommender OOP class stub.
+  - What was missing: no AI model, no natural language input, no logging,
+    no guardrails, no real-time UI, Recommender class was unimplemented.
 
 
-PHASE 2 -- Add Claude RAG Module
----------------------------------
-New file: src/rag_explainer.py
+===========================================================================
+RUBRIC ITEM 2 (3pts) + STRETCH (+2pts each) -- AI Features
+===========================================================================
 
-Single public function:
-    explain_with_claude(user_prefs: dict, top_songs: list, query: str) -> str
+CORE AI FEATURE: RAG + Claude API  [earns the 3 required points]
+-----------------------------------------------------------------
+The existing score_song() / recommend_songs() IS the retrieval layer.
+Claude API is the generation layer -- receives scored songs as context
+and generates a personalized natural language explanation.
+This is true RAG: retrieve -> augment -> generate.
 
-Flow:
-  1. Retrieval already done -- top_songs arrives pre-scored from recommend_songs()
-  2. Build a structured context block: title, artist, score, reasons for each song
-  3. Send to Claude with the context injected into the prompt -- Claude reasons over it
-  4. Return Claude's natural language explanation
-  5. On API error -> fall back to the rule-based reasons list (logged as WARNING)
-  6. Use prompt caching on the system message (cost optimization)
+STRETCH FEATURE A: Multi-Source RAG  [+2pts]
+---------------------------------------------
+Add a second retrieval source: data/genre_descriptions.txt
+  - A plain-text file with 1-2 paragraph descriptions of each genre
+    (e.g., "Lofi hip hop is characterized by...").
+  - When building the Claude context block, also retrieve the genre
+    description matching the user's preferred genre and inject it.
+  - Claude then reasons over BOTH the scored songs AND genre knowledge.
+  - Function: load_genre_context(genre: str) -> str
+    reads genre_descriptions.txt and returns the matching paragraph.
+  - Impact on output: Claude can explain why a genre fits the user's
+    emotional state, not just that the genre label matched.
 
-Claude model: claude-sonnet-4-6
-Max tokens: 512
-Client init: anthropic.Anthropic() (reads ANTHROPIC_API_KEY from environment)
+STRETCH FEATURE B: Agentic Workflow  [+2pts]
+---------------------------------------------
+New file: src/agent.py
+Function: run_agent(user_query: str, songs: list) -> dict
 
+Multi-step chain with observable intermediate output:
+  Step 1 -- PARSE: Claude reads the user's free-text query and extracts
+    structured preferences as JSON:
+    {"genre": "lofi", "mood": "chill", "energy": 0.3, ...}
+    Log: "AGENT STEP 1 -- Parsed preferences: {...}"
 
-PHASE 3 -- Logging & Guardrails
----------------------------------
-New file: src/logger_config.py
-  - setup_logging(log_file="recommender.log") function
-  - Console handler: WARNING+ only
-  - File handler (recommender.log): DEBUG+ everything
-  - Format: "timestamp | module | level | message"
-  - Called once at startup in app.py and main.py
+  Step 2 -- RETRIEVE: Pass extracted prefs to recommend_songs().
+    Log: "AGENT STEP 2 -- Retrieved 5 candidates: [titles]"
 
-Guardrails to add:
-  - Empty song list -> return canned message, skip API call (log WARNING)
-  - k <= 0 in Recommender.recommend() -> raise ValueError
-  - Claude returns empty/short response -> fall back to rule-based (log WARNING)
-  - CSV file missing -> raise descriptive error with clear message
-  - Truncate context to top 3 songs if more than 5 are passed (defensive)
+  Step 3 -- EVALUATE: Claude receives the top-5 results and scores the
+    overall match quality on a 1-10 scale with a one-sentence rationale.
+    Log: "AGENT STEP 3 -- Match quality: 8/10 -- reason: ..."
 
-Error handling:
-  - Wrap API call in try/except anthropic.APIError
-  - Log exception type and message at WARNING level
-  - Return fallback string -- app never crashes due to API issues
+  Step 4 -- REFINE (conditional): If match quality < 6, Claude adjusts
+    one preference (e.g., loosens genre constraint) and re-runs Step 2.
+    Log: "AGENT STEP 4 -- Refining: relaxed genre constraint -> retrying"
+    Maximum 1 retry to avoid infinite loops.
 
+  Step 5 -- EXPLAIN: Call explain_with_claude() on final results.
 
-PHASE 4 -- Streamlit Chat UI
-------------------------------
-New file: app.py (project root -- main entry point)
+  Return: {"steps": [list of step logs], "recommendations": top_songs,
+           "explanation": str, "match_quality": int}
 
-Sidebar (st.sidebar):
-  - Genre dropdown: sourced dynamically from songs.csv unique values
-  - Mood dropdown: sourced dynamically from songs.csv unique values
-  - Energy slider: 0.0 to 1.0, step 0.05
-  - Valence slider: 0.0 to 1.0, step 0.05
-  - Decade selectbox: 1960s / 1970s / 1980s / 1990s / 2000s / 2010s / 2020s
-  - "Find My Songs" button
-
-Main panel:
-  - Top 5 song cards showing title, artist, genre, mood_tag, score bar
-  - Below cards: Claude's RAG explanation in a styled st.info() block
-    with header "Your Personalized Explanation"
-  - st.spinner("Claude is thinking...") while API call runs
-  - st.warning() if fallback explanation was used
-
-State management:
-  - st.session_state to store last results
-  - Only re-run RAG call if preferences actually changed
-  - Call setup_logging() at module level (top of app.py)
+  The Streamlit UI exposes an "Advanced Mode" toggle that shows the
+  agent's step logs in an st.expander("Agent reasoning steps").
+  This makes intermediate steps observable in output (required for credit).
 
 
-PHASE 5 -- Tests for Reliability
-----------------------------------
-Modify: tests/test_recommender.py
-  - Existing tests pass once Phase 1 is complete (no changes needed to tests)
-  - Add test_recommend_returns_k_results(): assert len == 1 when k=1
-  - Add test_recommend_empty_songs_returns_empty_list()
-  - Add test_explain_recommendation_mentions_genre(): assert "pop" in output
+===========================================================================
+RUBRIC ITEM 3 (3pts) -- System Architecture Diagram
+===========================================================================
+The existing assets/Final_Mermaid_class_diagram.png shows the CLASS
+structure but does NOT show data flow. A second diagram is needed that
+matches the actual upgraded implementation.
 
-New file: tests/test_rag_explainer.py
-  - All tests mock the Claude API -- zero real API calls, no key required
-  - test_explain_with_claude_returns_string(): mock returns fixed string, assert str
-  - test_explain_with_claude_fallback_on_api_error(): mock raises APIStatusError,
-    assert fallback string returned (not an exception)
-  - test_explain_with_claude_empty_songs_returns_canned_message(): assert API
-    mock was NOT called (mock.assert_not_called())
-  - test_context_contains_song_title(): inspect args passed to mock's
-    messages.create() -- assert song title appears in prompt content
-    (CRITICAL: proves RAG actually injects retrieved data into the prompt)
+Create: assets/architecture_diagram.png (or .svg)
+Use Mermaid flowchart syntax, rendered to an image.
 
-New file: tests/test_load_songs.py
-  - test_load_songs_returns_correct_count(): assert len == expected row count
-  - test_load_songs_numeric_fields_are_floats(): assert isinstance(energy, float)
-  - test_load_songs_file_not_found_raises(): assert FileNotFoundError on bad path
+Diagram must show these components connected by labeled arrows:
 
+  [User Input]
+      |
+      v (free-text query OR sidebar preferences)
+  [app.py -- Streamlit UI]
+      |
+      +---> [src/agent.py -- Agentic Workflow]  (Advanced Mode)
+      |          |
+      |     Step 1: Claude parses query -> structured prefs
+      |     Step 2: recommend_songs() retrieves top-5
+      |     Step 3: Claude evaluates match quality
+      |     Step 4: (conditional) refine and retry
+      |          |
+      +---> [src/rag_explainer.py -- RAG Layer]
+                 |
+            Retrieval: recommend_songs() + load_genre_context()
+                 |     (songs.csv + genre_descriptions.txt)
+                 |
+            Generation: Claude API (claude-sonnet-4-6)
+                 |
+                 v
+  [Personalized Explanation + Ranked Song Cards]
+      |
+      v
+  [recommender.log -- audit trail]
 
-PHASE 6 -- Dependencies, Environment & Setup
-----------------------------------------------
-Modify requirements.txt -- add:
-  anthropic>=0.40.0
-  python-dotenv>=1.0.0
-
-Create .env.example:
-  ANTHROPIC_API_KEY=your_api_key_here
-
-Create/update .gitignore -- must include:
-  .env
-  recommender.log
-  __pycache__/
-  *.pyc
-  .pytest_cache/
-
-Create README.md with these sections:
-  1. Prerequisites: Python 3.10+, pip
-  2. Setup:
-       git clone <repo-url>
-       pip install -r requirements.txt
-       cp .env.example .env   # then edit .env and add your Anthropic API key
-  3. Run Streamlit app:  streamlit run app.py
-  4. Run CLI demo:       python main.py
-  5. Run tests:          pytest tests/   (no API key needed -- RAG calls are mocked)
-  6. Project structure tree
+Include in README.md as an embedded image.
+Caption must state: "Diagram reflects actual implementation."
 
 
+===========================================================================
+RUBRIC ITEM 4 (3pts) -- Functional End-to-End Demo
+===========================================================================
+Two demo paths must work and be documented with sample output:
+
+PATH A -- Streamlit UI (app.py):
+  streamlit run app.py
+  - Select genre=lofi, mood=chill, energy=0.3, decade=2020s -> click button
+  - Select genre=rock, mood=intense, energy=0.9, decade=2010s -> click button
+  - Select genre=pop, mood=happy, energy=0.85, decade=2020s -> click button
+
+PATH B -- CLI demo (main.py):
+  python main.py
+  Runs all 7 hardcoded profiles and prints ranked results.
+
+PATH C -- Agent mode (direct):
+  python -c "from src.agent import run_agent; from recommender import load_songs;
+  songs = load_songs('data/songs.csv');
+  result = run_agent('I want something calm to study to', songs);
+  print(result['explanation'])"
+
+README must include sample output blocks for at least 3 inputs
+(earns the "responds consistently to 2-3 example inputs" point).
+
+
+===========================================================================
+RUBRIC ITEM 5 (3pts) + STRETCH (+2pts) -- Reliability & Test Harness
+===========================================================================
+
+GUARDRAILS (required 3pts):
+----------------------------
+These must all be demonstrated with printed examples in the README:
+
+  1. Input validation in agent.py:
+     - If Claude returns malformed JSON in Step 1, fall back to default
+       preferences and log WARNING: "Could not parse query, using defaults"
+     - Example to show: input "asdfghjkl" -> graceful fallback
+
+  2. Output guardrail in rag_explainer.py:
+     - If Claude explanation is < 20 chars -> use rule-based fallback
+     - Log WARNING: "Claude response too short, using fallback"
+
+  3. API error guardrail:
+     - Wrap all API calls in try/except anthropic.APIError
+     - Return fallback, never crash
+     - Log ERROR with exception details
+
+  4. CSV guardrail in load_songs():
+     - File not found -> raise FileNotFoundError("songs.csv not found at {path}")
+     - Missing required column -> raise ValueError("Missing column: {col}")
+
+STRETCH FEATURE C: Test Harness / Evaluation Script  [+2pts]
+--------------------------------------------------------------
+New file: eval.py (project root, runs standalone)
+
+Evaluates the system on 8 predefined inputs and prints a summary:
+
+  INPUTS (define as a list of dicts at top of file):
+    1. HIGH_ENERGY_POP profile (genre=pop, mood=happy, energy=0.9)
+       Expected: top result genre == "pop" OR mood == "happy"
+    2. CHILL_LOFI profile
+       Expected: top result energy < 0.5
+    3. DEEP_INTENSE_ROCK profile
+       Expected: top result genre == "rock" OR mood == "intense"
+    4. RARE_GENRE (bossa nova) -- adversarial
+       Expected: score < 4.0 (no perfect match exists -- system should not
+       hallucinate; it should return best available with lower score)
+    5. PERFECTLY_AVERAGE (all 0.5) -- adversarial
+       Expected: returns 5 results (system never crashes on degenerate input)
+    6. Empty query string -- guardrail test
+       Expected: returns fallback message, does not crash
+    7. Query with 1000 character gibberish -- guardrail test
+       Expected: returns fallback or default prefs, does not crash
+    8. ACOUSTIC_METALHEAD (contradictory prefs) -- adversarial
+       Expected: returns results (system handles impossible combos gracefully)
+
+  FOR EACH INPUT: run recommend_songs(), check assertion, print PASS/FAIL
+  At end: print summary table:
+    "Passed: 7/8  |  Failed: 1/8  |  Pass rate: 87.5%"
+    List any failures with the actual vs expected value.
+
+  eval.py does NOT call the Claude API (tests the retrieval layer only,
+  so it runs in any environment without a key).
+
+
+===========================================================================
+RUBRIC ITEM 6 (3pts) -- README and Setup Instructions
+===========================================================================
+README.md must contain ALL of these to earn full 3 points:
+
+SECTION 1 -- Project Overview
+  - One paragraph: what the original system did
+  - One paragraph: what was added (RAG, agentic workflow, guardrails)
+  - Embed architecture diagram image
+
+SECTION 2 -- Setup Instructions (step by step, no skipped steps)
+  git clone https://github.com/rodriguezjuna707-max/applied-ai-system-project.git
+  cd applied-ai-system-project
+  pip install -r requirements.txt
+  cp .env.example .env
+  # Edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+
+SECTION 3 -- Running the System
+  Streamlit UI:   streamlit run app.py
+  CLI demo:       python main.py
+  Eval harness:   python eval.py
+  Tests:          pytest tests/ -v
+
+SECTION 4 -- Sample Input/Output  (REQUIRED for full credit)
+  Must show 3 complete examples with actual output text, e.g.:
+
+  Example 1 -- High Energy Pop:
+    Input: genre=pop, mood=happy, energy=0.9, decade=2020s
+    Top result: "Sunrise City by Neon Echo | Score: 5.84/6.80"
+    Claude says: "Sunrise City nails your euphoric pop target..."
+
+  Example 2 -- Chill Lofi:
+    Input: genre=lofi, mood=chill, energy=0.3, decade=2020s
+    Top result: "Library Rain by Paper Lanterns | Score: 5.21/6.80"
+    Claude says: "Library Rain matches your serene, low-energy preference..."
+
+  Example 3 -- Guardrail triggered:
+    Input: (empty/gibberish query in agent mode)
+    System: "Could not parse preferences, using defaults. Here are popular
+    recommendations..." [shows results anyway]
+
+SECTION 5 -- Project Structure tree
+
+
+===========================================================================
+RUBRIC ITEM 7 (3pts) -- Reflection on AI Collaboration
+===========================================================================
+Update reflection.md -- add a new section titled:
+"AI Collaboration Reflection"
+
+Must address all 3 bullet points to earn full 3 points:
+
+1. How AI was used during development:
+   - Used Claude to generate the scoring weight system and POINTS dict
+   - Used Claude to design the RAG prompt structure
+   - Used Claude to debug the UserProfile->dict key mismatch
+     (favorite_genre vs genre key expected by score_song)
+   - Used Claude to write boilerplate (dataclass defaults, logging config)
+
+2. One helpful AI suggestion + one flawed suggestion:
+   HELPFUL: Claude suggested the sqrt curve for popularity scoring
+   (pts * sqrt(pop/100)) which correctly compresses the gap between 80
+   and 100 so moderately popular songs still earn ~80% of the reward.
+   This was non-obvious and meaningfully improved recommendation quality.
+
+   FLAWED: Claude initially suggested using st.chat_input() for the UI,
+   which would require managing a full conversation history loop. This was
+   unnecessary complexity for a retrieval-then-display pattern. The
+   sidebar + results panel is simpler and makes the RAG flow more visible.
+
+3. System limitations and future improvements:
+   LIMITATIONS:
+   - Catalog is only 18 songs -- scores are meaningful but variety is low
+   - Genre matching is exact string match -- "hip hop" != "hip-hop"
+   - Agent retry logic only fires once -- a real agent might loop 3-5 times
+   - No user account system -- preferences reset on every page load
+
+   FUTURE IMPROVEMENTS:
+   - Replace CSV with a vector database (e.g., ChromaDB) for semantic search
+   - Add Spotify API as a second retrieval source (real catalog, millions of songs)
+   - Fine-tune Claude with music domain examples for richer explanations
+   - Add user feedback loop: thumbs up/down to improve future recommendations
+
+
+===========================================================================
 EXECUTION ORDER
----------------
-Phase 1 -> Phase 3 -> Phase 2 -> Phase 4 -> Phase 5 -> Phase 6
+===========================================================================
+Phase 1  -- Fix package structure & Recommender stubs (all tests pass)
+Phase 3  -- Logging & guardrails infrastructure (logger_config.py)
+Phase 2  -- RAG module (src/rag_explainer.py) with multi-source retrieval
+Phase 2B -- Agentic workflow (src/agent.py)
+Phase 4  -- Streamlit UI (app.py) with Advanced Mode toggle for agent
+Phase 5  -- Tests (test_rag_explainer.py, test_load_songs.py)
+Phase 5B -- Eval harness (eval.py)
+Phase 6  -- README, .env.example, .gitignore, requirements.txt, reflection.md
+Phase 7  -- Architecture diagram (assets/architecture_diagram.png)
 
-NOTE: Phase 3 (logger config) must be created BEFORE Phase 2 (rag_explainer)
-because rag_explainer.py imports from logger_config.py.
+NOTE: Phase 3 before Phase 2 -- rag_explainer.py imports logger_config.py.
+NOTE: Phase 2B before Phase 4 -- app.py imports agent.py.
 
 
+===========================================================================
 FILE STRUCTURE AFTER COMPLETION
----------------------------------
+===========================================================================
 applied-ai-system-project/
   src/
     __init__.py
     recommender.py          (moved + fixed from root)
-    rag_explainer.py        (NEW -- RAG + Claude API)
+    rag_explainer.py        (NEW -- RAG + Claude API + multi-source)
     logger_config.py        (NEW -- logging setup)
+    agent.py                (NEW -- agentic workflow, 5-step chain)
   tests/
     __init__.py             (NEW)
     test_recommender.py     (updated)
@@ -170,14 +319,37 @@ applied-ai-system-project/
     test_load_songs.py      (NEW)
   data/
     songs.csv
+    genre_descriptions.txt  (NEW -- second RAG source)
   assets/
     Final_Mermaid_class_diagram.png
+    architecture_diagram.png (NEW -- data flow diagram for rubric item 3)
   app.py                    (NEW -- Streamlit UI, main entry point)
+  eval.py                   (NEW -- test harness, stretch +2pts)
   main.py                   (updated -- calls setup_logging)
-  recommender.py            (keep at root for backward compat with main.py)
+  recommender.py            (keep at root for backward compat)
   requirements.txt          (updated)
   .env.example              (NEW)
   .gitignore                (NEW/updated)
-  README.md                 (NEW)
-  reflection.md
+  README.md                 (NEW -- full docs with sample I/O)
+  reflection.md             (updated -- AI collaboration section added)
   plan.txt                  (this file)
+
+
+===========================================================================
+POINTS BREAKDOWN
+===========================================================================
+Required (21 pts):
+  [3] Base project identification -- README + reflection cover original scope
+  [3] Substantial AI feature -- RAG with Claude API, fully integrated
+  [3] Architecture diagram -- data flow diagram matches implementation
+  [3] End-to-end demo -- Streamlit UI + CLI + 3 sample inputs in README
+  [3] Reliability/guardrails -- 4 guardrails + examples in README
+  [3] README -- all 5 sections including sample I/O
+  [3] Reflection -- all 3 bullet points addressed
+
+Stretch (up to +6 pts targeted):
+  [+2] RAG Enhancement -- genre_descriptions.txt as second retrieval source
+  [+2] Agentic Workflow -- 5-step agent with observable logs in UI
+  [+2] Test Harness -- eval.py runs 8 inputs, prints pass/fail summary
+
+TOTAL TARGET: 27 / 29 possible points
