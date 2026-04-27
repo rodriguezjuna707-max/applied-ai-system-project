@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "tests",
+			"path": "."
+		},
+		{
+			"name": "data",
+			"path": "../data"
+		},
+		{
+			"name": "applied-ai-system-project",
+			"path": "../../applied-ai-system-project"
+		},
+		{
+			"name": "src",
+			"path": "../src"
+		}
+	],
+	"settings": {}
+}
